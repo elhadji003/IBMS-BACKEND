@@ -1,0 +1,41 @@
+# Environnement virtuel
+.venv/
+env/
+ENV/
+venv/
+
+# Fichiers Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Fichiers de log
+*.log
+
+# Fichiers d'environnement
+.env
+.env.*
+
+# Base de données locale (SQLite)
+db.sqlite3
+*.sqlite3
+
+# Fichiers de migration (facultatif)
+**/migrations/__pycache__/
+**/migrations/*.pyc
+
+# Cache de l'IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Static & media collectés
+/staticfiles/
+/media/
+
+# Fichiers Render spécifiques
+render.yaml
+
+# MacOS
+.DS_Store
