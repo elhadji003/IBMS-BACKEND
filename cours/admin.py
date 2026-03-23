@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Course, CoursePayment, CourseContent
+from .models import Course, CoursePayment, CourseContent, Partner
 
 # 1. Gestion des contenus (Vidéos/Fichiers) à l'intérieur de la page du Cours
 class CourseContentInline(admin.TabularInline):
@@ -29,3 +29,8 @@ class CourseContentAdmin(admin.ModelAdmin):
     list_display = ('title', 'course', 'order')
     list_filter = ('course',)
     search_fields = ('title',)
+    
+@admin.register(Partner)
+class PartnerAdmin(admin.ModelAdmin):
+    list_display = ('name', 'phone')
+    search_fields = ('name', 'phone')
