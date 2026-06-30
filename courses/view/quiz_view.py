@@ -62,7 +62,7 @@ class CourseQuizView(APIView):
             Course,
             id=course_id  # 🌟 Changé : slug=slug -> id=course_id
         )
-
+        
         serializer = QuizSubmissionSerializer(
             data=request.data
         )
@@ -85,6 +85,7 @@ class CourseQuizView(APIView):
 
         total_questions = questions.count()
         correct_answers_count = 0
+        
 
         for question in questions:
 
@@ -121,16 +122,22 @@ class CourseQuizView(APIView):
             user=request.user,
             course=course,
             score=score_percentage,
-            passed=passed
+            passed=passed,
         )
 
-        # Mise à jour progression
-        if passed:
 
+        # Mise à jour progression
+        xp_gagnes = 0
+        if passed:
             progress, _ = CourseProgress.objects.get_or_create(
                 user=request.user,
                 course=course
             )
+                        
+            if not progress.is_completed:
+                xp_gagnes = 150
+                request.user.total_xp += xp_gagnes
+                request.user.save(update_fields=['total_xp'])
 
             progress.progress_percentage = 100
             progress.is_completed = True
@@ -142,6 +149,8 @@ class CourseQuizView(APIView):
                 "passed": passed,
                 "correct_answers": correct_answers_count,
                 "total_questions": total_questions,
+                "xp_gagnes": xp_gagnes,
+                "total_xp": request.user.total_xp,
                 "message": (
                     "Félicitations 🎉 cours validé."
                     if passed

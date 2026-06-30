@@ -34,6 +34,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     email = models.EmailField(unique=True, db_index=True)
 
     avatar = models.ImageField(upload_to="avatars/", blank=True, null=True)
+    
+    total_xp = models.IntegerField(default=0)
 
     phone_number = models.CharField(
         validators=[phone_regex],
@@ -64,4 +66,13 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_super_admin(self):
-        return self.role == "super-admin"
+        return self.role == "super-admin"   
+    
+    def add_xp(self, amount):
+        """
+        Ajoute de l'expérience à l'utilisateur de manière sécurisée.
+        """
+        if amount > 0:
+            self.total_xp += amount
+            self.save(update_fields=['total_xp'])
+        return self.total_xp
