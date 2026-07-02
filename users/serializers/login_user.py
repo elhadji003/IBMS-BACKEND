@@ -18,5 +18,6 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             'first_name': user.first_name,
             'last_name': user.last_name,
             'role': user.role,
+            'total_xp': user.total_xp,
         }
         return data

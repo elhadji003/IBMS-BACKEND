@@ -1,3 +1,4 @@
+from django.db.models import Prefetch
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.views import APIView
@@ -23,6 +24,20 @@ class CourseListView(generics.ListCreateAPIView):
         category = self.request.query_params.get("category")
         if category:
             queryset = queryset.filter(category__iexact=category)
+
+        # 🌟 CORRIGÉ : le serializer attend un attribut "user_progress_list"
+        # préchargé sur chaque Course (voir CourseSerializer._get_progress_obj).
+        # Sans ce prefetch, il retombait toujours sur None -> valeurs par défaut
+        # (time_remaining=3600, is_quiz_unlocked=False) même après le délai écoulé.
+        user = self.request.user
+        if user.is_authenticated:
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "user_progress",
+                    queryset=CourseProgress.objects.filter(user=user),
+                    to_attr="user_progress_list",
+                )
+            )
         return queryset
 
 
@@ -33,10 +48,8 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     - PATCH  : Modification partielle (Admin uniquement)
     - DELETE : Suppression d'un cours (Admin uniquement)
     """
-    queryset = Course.objects.all()
     serializer_class = CourseSerializer
-    
-    # 🌟 CORRECTION ICI : On lie le champ de la BDD ("pk" ou "id") au mot-clé défini dans urls.py ("course_id")
+
     lookup_field = "pk"
     lookup_url_kwarg = "course_id"
 
@@ -45,6 +58,21 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
             return [IsAuthenticated(), IsAdminUser()]
         return [IsAuthenticated()]
 
+    def get_queryset(self):
+        # 🌟 CORRIGÉ : même prefetch que CourseListView, indispensable ici aussi
+        # car c'est CourseDetailView qui sert la page CoursDetail.jsx (le chrono).
+        queryset = Course.objects.all()
+        user = self.request.user
+        if user.is_authenticated:
+            queryset = queryset.prefetch_related(
+                Prefetch(
+                    "user_progress",
+                    queryset=CourseProgress.objects.filter(user=user),
+                    to_attr="user_progress_list",
+                )
+            )
+        return queryset
+
 
 class UpdateCourseProgressView(APIView):
     """
@@ -52,10 +80,8 @@ class UpdateCourseProgressView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
-    # 🌟 CORRECTION ICI : On accepte l'argument course_id envoyé par l'URL
     def patch(self, request, course_id):
         try:
-            # 🌟 CORRECTION ICI : Recherche par id
             course = Course.objects.get(id=course_id)
         except Course.DoesNotExist:
             return Response({"detail": "Cours introuvable."}, status=status.HTTP_404_NOT_FOUND)
@@ -84,12 +110,24 @@ class UpdateCourseProgressView(APIView):
             return Response({"detail": "'progress_percentage' doit être entre 0 et 100."}, status=status.HTTP_400_BAD_REQUEST)
 
         progress, _created = CourseProgress.objects.get_or_create(user=request.user, course=course)
+
+        # 🌟 CORRIGÉ : garde-fou anti-triche.
+        # On ne peut pas passer à 100% (compléter le cours) sans que le quiz
+        # ait réellement été débloqué côté serveur (chrono écoulé + logique métier
+        # de CourseProgress.is_quiz_unlocked). Ça bloque un PATCH direct via devtools
+        # qui tenterait de sauter l'étape du quiz.
+        if progress_percentage >= 100 and not progress.is_quiz_unlocked:
+            return Response(
+                {"detail": "Impossible de valider le cours : le quiz n'est pas encore débloqué."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         progress.progress_percentage = progress_percentage
         progress.is_completed = progress_percentage >= 100
         progress.save()
 
         return Response({
-            "course_id": course.id,  # 🌟 Retourne l'id au lieu du slug
+            "course_id": course.id,
             "progress_percentage": progress.progress_percentage,
             "is_completed": progress.is_completed,
         }, status=status.HTTP_200_OK)
