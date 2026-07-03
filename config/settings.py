@@ -48,8 +48,8 @@ INSTALLED_APPS = [
 
     # Local apps
     'users',
-    'cours',
     'courses',
+    'payments',
 ]
 
 
@@ -212,3 +212,13 @@ USE_TZ = True
 # DEFAULTS
 # =====================
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# =============
+# Paydunya
+# =============
+PAYDUNYA_MASTER_KEY = os.getenv("PAYDUNYA_MASTER_KEY")
+PAYDUNYA_PUBLIC_KEY = os.getenv("PAYDUNYA_PUBLIC_KEY")
+PAYDUNYA_PRIVATE_KEY = os.getenv("PAYDUNYA_PRIVATE_KEY")
+PAYDUNYA_TOKEN = os.getenv("PAYDUNYA_TOKEN")
+PAYDUNYA_MODE = os.getenv("PAYDUNYA_MODE", "test")

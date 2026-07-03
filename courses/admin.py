@@ -5,8 +5,8 @@ from .models import Course, CourseProgress, Question, Choice, QuizSubmission
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ('title', 'category', 'is_foundational', 'created_at')
-    list_filter = ('category', 'is_foundational')
+    list_display = ('title', 'category', 'is_foundational', 'is_free', 'price', 'created_at')
+    list_filter = ('category', 'is_foundational', 'is_free')
     search_fields = ('title', 'description', 'category')
     prepopulated_fields = {'slug': ('title',)}
 
