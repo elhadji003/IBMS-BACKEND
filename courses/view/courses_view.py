@@ -131,3 +131,32 @@ class UpdateCourseProgressView(APIView):
             "progress_percentage": progress.progress_percentage,
             "is_completed": progress.is_completed,
         }, status=status.HTTP_200_OK)
+        
+
+class UserCourseStatsView(APIView):
+    """
+    GET : Renvoie le nombre de cours terminés par l'utilisateur connecté
+    ainsi que le nombre total de cours disponibles dans l'application.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        
+        # 1. Compter le nombre de cours validés à 100% par cet utilisateur
+        completed_courses_count = CourseProgress.objects.filter(
+            user=user, 
+            is_completed=True
+        ).count()
+        
+        # 2. Compter le nombre total de cours existants dans l'application
+        total_courses_count = Course.objects.count()
+
+        return Response({
+            "completed_courses": completed_courses_count,
+            "total_courses": total_courses_count,
+            "completion_percentage": (
+                round((completed_courses_count / total_courses_count) * 100, 2) 
+                if total_courses_count > 0 else 0
+            )
+        }, status=status.HTTP_200_OK)
