@@ -1,4 +1,6 @@
 from django.db.models import Prefetch
+from django.contrib.auth import get_user_model
+from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.views import APIView
@@ -6,7 +8,7 @@ from rest_framework.response import Response
 from ..models import Course, CourseProgress
 from ..serializers.courses_serializers import CourseSerializer
 
-
+User = get_user_model()
 class CourseListView(generics.ListCreateAPIView):
     """
     - GET  : Liste tous les cours (Accessible par tout utilisateur connecté)
@@ -20,15 +22,11 @@ class CourseListView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        queryset = Course.objects.all().order_by("-is_foundational", "title")
+        queryset = Course.objects.all().order_by("-is_foundational", "id")
         category = self.request.query_params.get("category")
         if category:
             queryset = queryset.filter(category__iexact=category)
 
-        # 🌟 CORRIGÉ : le serializer attend un attribut "user_progress_list"
-        # préchargé sur chaque Course (voir CourseSerializer._get_progress_obj).
-        # Sans ce prefetch, il retombait toujours sur None -> valeurs par défaut
-        # (time_remaining=3600, is_quiz_unlocked=False) même après le délai écoulé.
         user = self.request.user
         if user.is_authenticated:
             queryset = queryset.prefetch_related(
@@ -131,21 +129,33 @@ class UpdateCourseProgressView(APIView):
             "progress_percentage": progress.progress_percentage,
             "is_completed": progress.is_completed,
         }, status=status.HTTP_200_OK)
-        
 
 class UserCourseStatsView(APIView):
     """
-    GET : Renvoie le nombre de cours terminés par l'utilisateur connecté
-    ainsi que le nombre total de cours disponibles dans l'application.
+    GET : Renvoie les statistiques de cours.
+    - Pour l'étudiant connecté : renvoie ses propres données.
+    - Pour l'admin : renvoie les données de l'utilisateur spécifié via ?id=X.
     """
+    # Reste en IsAuthenticated pour que l'étudiant standard y ait toujours accès
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user = request.user
+        user_id = request.query_params.get('id')
         
-        # 1. Compter le nombre de cours validés à 100% par cet utilisateur
+        target_user = request.user
+        
+        if user_id:
+            if request.user.is_superuser or getattr(request.user, 'is_staff', False):
+                target_user = get_object_or_404(User, id=user_id)
+            else:
+                return Response(
+                    {"detail": "Accès refusé. Seul un administrateur peut voir les statistiques d'un autre utilisateur."},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+        
+        # 1. Compter le nombre de cours validés à 100% par l'utilisateur ciblé
         completed_courses_count = CourseProgress.objects.filter(
-            user=user, 
+            user=target_user, 
             is_completed=True
         ).count()
         
@@ -153,6 +163,7 @@ class UserCourseStatsView(APIView):
         total_courses_count = Course.objects.count()
 
         return Response({
+            "user_id": target_user.id,
             "completed_courses": completed_courses_count,
             "total_courses": total_courses_count,
             "completion_percentage": (

@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth import get_user_model
+from django.utils.text import slugify
 from django.utils import timezone
 from datetime import timedelta
 
@@ -22,6 +23,12 @@ class Course(models.Model):
         null=True,
         blank=True
     )
+    
+    def save(self, *args, **kwargs):
+        # Si le slug est vide, absent ou uniquement des espaces, on le génère à partir du titre
+        if not self.slug or self.slug.strip() == "":
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title

@@ -5,7 +5,7 @@ class ProfileUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["first_name", "last_name", "phone_number",  "total_xp",
-                "email", "role", "avatar", "created_at",]
+                "email", "role", "avatar", "created_at", "is_active"]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
