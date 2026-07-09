@@ -8,12 +8,11 @@ class CourseAdmin(admin.ModelAdmin):
     list_display = ('title', 'category', 'is_foundational', 'is_free', 'price', 'created_at')
     list_filter = ('category', 'is_foundational', 'is_free')
     search_fields = ('title', 'description', 'category')
-    prepopulated_fields = {'slug': ('title',)}
+    # 🌟 CORRIGÉ : Ligne 'prepopulated_fields' retirée car le champ slug n'existe plus !
 
 
 @admin.register(CourseProgress)
 class CourseProgressAdmin(admin.ModelAdmin):
-    # 🌟 AJOUT : 'started_at', 'get_time_remaining' et 'get_quiz_unlocked' dans l'affichage
     list_display = (
         'get_user_email', 
         'get_course_title', 
@@ -29,7 +28,13 @@ class CourseProgressAdmin(admin.ModelAdmin):
     raw_id_fields = ('user', 'course')
     
     # Rend ces champs visibles mais non modifiables lors de l'édition d'une ligne
-    readonly_fields = ('started_at', 'get_time_remaining', 'get_quiz_unlocked')
+    readonly_fields = ('started_at', 'get_time_remaining', 'get_quiz_unlocked', 'updated_at')
+    
+    # Structure l'affichage du formulaire d'édition pour voir les données dynamiques
+    fields = (
+        'user', 'course', 'progress_percentage', 'is_completed', 
+        'started_at', 'get_time_remaining', 'get_quiz_unlocked', 'updated_at'
+    )
 
     @admin.display(ordering='user__email', description='Étudiant (Email)')
     def get_user_email(self, obj):

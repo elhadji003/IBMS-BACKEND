@@ -1,4 +1,5 @@
 from django.db.models import Prefetch
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
@@ -9,6 +10,7 @@ from ..models import Course, CourseProgress
 from ..serializers.courses_serializers import CourseSerializer
 
 User = get_user_model()
+
 class CourseListView(generics.ListCreateAPIView):
     """
     - GET  : Liste tous les cours (Accessible par tout utilisateur connecté)
@@ -41,13 +43,12 @@ class CourseListView(generics.ListCreateAPIView):
 
 class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
-    - GET    : Détail d'un cours via son ID (Tout utilisateur connecté)
+    - GET    : Détail d'un cours + Initialisation automatique de la progression (F5 proof)
     - PUT    : Modification complète (Admin uniquement)
     - PATCH  : Modification partielle (Admin uniquement)
     - DELETE : Suppression d'un cours (Admin uniquement)
     """
     serializer_class = CourseSerializer
-
     lookup_field = "pk"
     lookup_url_kwarg = "course_id"
 
@@ -57,8 +58,6 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        # 🌟 CORRIGÉ : même prefetch que CourseListView, indispensable ici aussi
-        # car c'est CourseDetailView qui sert la page CoursDetail.jsx (le chrono).
         queryset = Course.objects.all()
         user = self.request.user
         if user.is_authenticated:
@@ -71,11 +70,27 @@ class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
             )
         return queryset
 
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Surcharge du GET pour garantir la création du CourseProgress dès l'entrée du cours.
+        """
+        instance = self.get_object()
+        user = request.user
+
+        if user.is_authenticated:
+            # Sécurité F5 : On s'assure que le CourseProgress existe dès qu'on demande le détail
+            progress, created = CourseProgress.objects.get_or_create(
+                user=user,
+                course=instance
+            )
+            # On met à jour l'attribut préchargé pour que le sérialiseur l'utilise immédiatement
+            instance.user_progress_list = [progress]
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
 
 class UpdateCourseProgressView(APIView):
-    """
-    Crée ou met à jour la progression de l'utilisateur connecté via PATCH.
-    """
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, course_id):
@@ -84,7 +99,7 @@ class UpdateCourseProgressView(APIView):
         except Course.DoesNotExist:
             return Response({"detail": "Cours introuvable."}, status=status.HTTP_404_NOT_FOUND)
 
-        # Sécurité Débutant optionnelle : bloque si le cours d'intro n'est pas fini
+        # 1. Vérification du cours de fondation
         if not course.is_foundational:
             intro_done = CourseProgress.objects.filter(
                 user=request.user, course__is_foundational=True, is_completed=True
@@ -95,6 +110,7 @@ class UpdateCourseProgressView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
 
+        # 2. Validation des inputs
         progress_percentage = request.data.get("progress_percentage")
         if progress_percentage is None:
             return Response({"detail": "Le champ 'progress_percentage' est requis."}, status=status.HTTP_400_BAD_REQUEST)
@@ -107,41 +123,36 @@ class UpdateCourseProgressView(APIView):
         if not (0 <= progress_percentage <= 100):
             return Response({"detail": "'progress_percentage' doit être entre 0 et 100."}, status=status.HTTP_400_BAD_REQUEST)
 
-        progress, _created = CourseProgress.objects.get_or_create(user=request.user, course=course)
-
-        # 🌟 CORRIGÉ : garde-fou anti-triche.
-        # On ne peut pas passer à 100% (compléter le cours) sans que le quiz
-        # ait réellement été débloqué côté serveur (chrono écoulé + logique métier
-        # de CourseProgress.is_quiz_unlocked). Ça bloque un PATCH direct via devtools
-        # qui tenterait de sauter l'étape du quiz.
+        # 3. Récupération (il existe forcément déjà grâce au CourseDetailView)
+        progress, created = CourseProgress.objects.get_or_create(
+            user=request.user, 
+            course=course
+        )
+        
+        # 4. SÉCURITÉ CRITIQUE UNIFIÉE
         if progress_percentage >= 100 and not progress.is_quiz_unlocked:
             return Response(
                 {"detail": "Impossible de valider le cours : le quiz n'est pas encore débloqué."},
                 status=status.HTTP_403_FORBIDDEN
             )
-
+        
+        # 5. Application des changements
         progress.progress_percentage = progress_percentage
         progress.is_completed = progress_percentage >= 100
         progress.save()
 
-        return Response({
-            "course_id": course.id,
-            "progress_percentage": progress.progress_percentage,
-            "is_completed": progress.is_completed,
-        }, status=status.HTTP_200_OK)
+        # Injection pour le sérialiseur
+        course.user_progress_list = [progress]
+        serializer = CourseSerializer(course, context={'request': request})
+
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class UserCourseStatsView(APIView):
-    """
-    GET : Renvoie les statistiques de cours.
-    - Pour l'étudiant connecté : renvoie ses propres données.
-    - Pour l'admin : renvoie les données de l'utilisateur spécifié via ?id=X.
-    """
-    # Reste en IsAuthenticated pour que l'étudiant standard y ait toujours accès
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user_id = request.query_params.get('id')
-        
         target_user = request.user
         
         if user_id:
@@ -153,13 +164,11 @@ class UserCourseStatsView(APIView):
                     status=status.HTTP_403_FORBIDDEN
                 )
         
-        # 1. Compter le nombre de cours validés à 100% par l'utilisateur ciblé
         completed_courses_count = CourseProgress.objects.filter(
             user=target_user, 
             is_completed=True
         ).count()
         
-        # 2. Compter le nombre total de cours existants dans l'application
         total_courses_count = Course.objects.count()
 
         return Response({
