@@ -70,3 +70,13 @@ class CourseSerializer(serializers.ModelSerializer):
             
         # On appelle directement la propriété du modèle
         return progress.is_quiz_unlocked
+    
+    def is_exercise_unlocked(user, exercise_module):
+        """
+        Vérifie si le cours lié à ce module d'exercices est terminé par l'étudiant.
+        """
+        try:
+            progress = CourseProgress.objects.get(user=user, course=exercise_module.course)
+            return progress.is_completed
+        except CourseProgress.DoesNotExist:
+            return False

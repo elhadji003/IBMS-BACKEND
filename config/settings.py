@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     'users',
     'courses',
     'payments',
+    'exercice',
+    'notification',
 ]
 
 
@@ -183,7 +185,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 DJANGO_ENV = os.getenv("DJANGO_ENV", "dev")
 
 if DJANGO_ENV == "prod":
-    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"   
     EMAIL_HOST = "smtp-relay.brevo.com" 
     EMAIL_PORT = 587
     EMAIL_USE_TLS = True
