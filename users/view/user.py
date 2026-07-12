@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAdminUser
@@ -133,3 +134,16 @@ class AllUsersView(APIView):
                 {"detail": f"Erreur lors de la suppression : {str(e)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+            
+
+class UserCountView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({
+            "total_users": User.objects.count(),
+            "active_users": User.objects.filter(is_active=True).count(),
+            "inactive_users": User.objects.filter(is_active=False).count(),
+            # Remplacez 'admin' par la valeur exacte utilisée dans votre projet :
+            "admin_users": User.objects.filter(role='super-admin').count(), 
+        })

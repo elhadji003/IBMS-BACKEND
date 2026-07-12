@@ -2,21 +2,9 @@ from django.db import models
 from django.contrib.auth import settings
 from courses.models import Course 
 
-class ExerciseModule(models.Model):
-    """
-    Regroupe les exercices par module de cours (ex: Microsoft Excel, Word...)
-    """
-    course = models.OneToOneField(Course, on_delete=models.CASCADE, related_name='exercise_module', verbose_name="Cours associé")
-    title = models.CharField(max_length=200, verbose_name="Titre du module d'exercices")
-    icon = models.CharField(max_length=10, default="💻", help_text="Emoji représentatif")
-
-    def __str__(self):
-        return f"Exercices de : {self.course.title}"
-
-
 class Exercise(models.Model):
     """
-    Un exercice spécifique appartenant à un module.
+    Un exercice spécifique appartenant directement à un Cours/Formation.
     """
     DIFFICULTY_CHOICES = [
         ('Débutant', 'Débutant'),
@@ -24,18 +12,24 @@ class Exercise(models.Model):
         ('Avancé', 'Avancé'),
     ]
 
-    module = models.ForeignKey(ExerciseModule, on_delete=models.CASCADE, related_name='exercises')
-    exercise_id = models.IntegerField(help_text="Numéro de l'exercice au sein du module (ex: 1, 2, 3)")
-    title = models.CharField(max_length=200)
+    # Liaison directe au cours
+    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='exercises', verbose_name="Cours associé")
+    exercise_id = models.IntegerField(help_text="Numéro de l'exercice au sein du cours (ex: 1, 2, 3)")
+    title = models.CharField(max_length=200, verbose_name="Intitulé de l'exercice")
     desc = models.TextField(verbose_name="Description / Consigne")
     difficulty = models.CharField(max_length=20, choices=DIFFICULTY_CHOICES, default='Débutant')
 
     class Meta:
         ordering = ['exercise_id']
-        unique_together = ('module', 'exercise_id')
+        # Unicité de l'index au sein d'un même cours
+        unique_together = ('course', 'exercise_id')
+
+        # N'oublie pas de lancer :
+        # python manage.py makemigrations
+        # python manage.py migrate
 
     def __str__(self):
-        return f"{self.module.title} - Ex {self.exercise_id} : {self.title}"
+        return f"{self.course.title} - Ex {self.exercise_id} : {self.title}"
 
 
 class ExerciseSubmission(models.Model):
@@ -59,4 +53,4 @@ class ExerciseSubmission(models.Model):
         unique_together = ('student', 'exercise')
 
     def __str__(self):
-        return f"{self.student.first_name} - {self.exercise.title} ({self.get_status_display()})"
+        return f"{self.student.username} - {self.exercise.title} ({self.get_status_display()})"

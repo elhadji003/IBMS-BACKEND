@@ -80,3 +80,5 @@ class CourseSerializer(serializers.ModelSerializer):
             return progress.is_completed
         except CourseProgress.DoesNotExist:
             return False
+        
+        

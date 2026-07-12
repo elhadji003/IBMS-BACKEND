@@ -4,7 +4,7 @@ from .view.auth_register import RegisterUserView, LoginUserView, LogoutView
 from .views import GetProfileUserView, GetProfileUserByIdView, UpdateProfileUserView, DeleteAccountWithPwd
 from .view.view_change_pwd import PasswordChangeView
 from .view.view_password import RequestPasswordResetView, PasswordResetConfirmView
-from .view.user import AllUsersView
+from .view.user import AllUsersView, UserCountView
 
 urlpatterns = [
     path('token/refresh/', TokenRefreshView.as_view(), name="token_refresh"),
@@ -18,6 +18,8 @@ urlpatterns = [
     path('update/profile/', UpdateProfileUserView.as_view(), name="update_profile_user"),
     path('delete/account/', DeleteAccountWithPwd.as_view(), name="delete_account_user"),
     path('admin/', AllUsersView.as_view(), name='admin-users-management'),
+    path('stats/users/', UserCountView.as_view(), name="stats_user"),
+    
 
     # Password Management
     path('change-password/', PasswordChangeView.as_view(), name="change_password"),

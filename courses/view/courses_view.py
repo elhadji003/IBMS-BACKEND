@@ -1,4 +1,6 @@
 from django.db.models import Prefetch
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import action
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
@@ -8,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from ..models import Course, CourseProgress
 from ..serializers.courses_serializers import CourseSerializer
+from ..serializers.cours_tab_serializers import CourseTabSerializer
 
 User = get_user_model()
 
@@ -39,8 +42,15 @@ class CourseListView(generics.ListCreateAPIView):
                 )
             )
         return queryset
+    
+class CourseTabListView(generics.ListAPIView):
+    """Endpoint léger : Liste uniquement l'essentiel pour les onglets"""
+    permission_classes = [IsAuthenticated] # Ajustez selon vos besoins
+    serializer_class = CourseTabSerializer
 
-
+    def get_queryset(self):
+        return Course.objects.all().order_by('id')
+    
 class CourseDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     - GET    : Détail d'un cours + Initialisation automatique de la progression (F5 proof)
@@ -180,3 +190,12 @@ class UserCourseStatsView(APIView):
                 if total_courses_count > 0 else 0
             )
         }, status=status.HTTP_200_OK)
+        
+        
+class CoursCountView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        return Response({
+            "total_cours": Course.objects.count()
+        })

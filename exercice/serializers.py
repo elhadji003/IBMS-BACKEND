@@ -1,44 +1,75 @@
 from rest_framework import serializers
-from .models import ExerciseModule, Exercise, ExerciseSubmission
-from courses.models import CourseProgress
+from courses.models import Course, CourseProgress
+from .models import Exercise, ExerciseSubmission
 
 class ExerciseSerializer(serializers.ModelSerializer):
     status = serializers.SerializerMethodField()
+    category = serializers.CharField(source="course.category", read_only=True)
+    is_unlocked = serializers.SerializerMethodField()
 
     class Meta:
         model = Exercise
-        fields = ['id', 'exercise_id', 'title', 'desc', 'difficulty', 'status']
+        fields = [
+            'id', 'course', 'category', 'exercise_id', 
+            'title', 'desc', 'difficulty', 'status', 'is_unlocked' # 2. N'oublie pas de l'exposer
+        ]
 
     def get_status(self, obj):
-        # Récupère l'utilisateur connecté depuis le contexte de la requête
-        user = self.context.get('request').user
-        if user and user.is_authenticated:
-            submission = ExerciseSubmission.objects.filter(student=user, exercise=obj).first()
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated:
+            submission = ExerciseSubmission.objects.filter(
+                student=request.user, 
+                exercise=obj
+            ).first()
             if submission:
                 return submission.status
         return 'not_started'
 
+    # 3. LA LOGIQUE DE DÉBLOCAGE PAR COURS
+    def get_is_unlocked(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+            
+        user = request.user
+        # Les admins/staff ont toujours accès à tout pour tester
+        if user.is_staff or user.is_superuser:
+            return True
 
-class ExerciseModuleSerializer(serializers.ModelSerializer):
+        # On cherche si l'étudiant a fini le cours théorique lié à cet exercice
+        try:
+            progress = CourseProgress.objects.get(user=user, course=obj.course)
+            return progress.is_completed # Renvoie True si le cours est terminé, sinon False
+        except CourseProgress.DoesNotExist:
+            # Si aucune ligne de progression n'existe, c'est que le cours n'a pas été terminé
+            return False
+
+class CourseWithExercisesSerializer(serializers.ModelSerializer):
+    """
+    Remplace l'ancien ExerciseModuleSerializer.
+    Sérialise le cours avec ses exercices directs et calcule si l'accès est déverrouillé.
+    """
     exercises = ExerciseSerializer(many=True, read_only=True)
     is_unlocked = serializers.SerializerMethodField()
 
     class Meta:
-        model = ExerciseModule
-        fields = ['id', 'title', 'icon', 'course', 'is_unlocked', 'exercises']
+        model = Course
+        fields = ['id', 'title', 'icon', 'is_unlocked', 'exercises']
 
     def get_is_unlocked(self, obj):
-        user = self.context.get('request').user
-        if user and user.is_authenticated:
+        request = self.context.get('request')
+        if request and request.user and request.user.is_authenticated:
+            user = request.user
             if user.is_staff or user.is_superuser:
                 return True
-            # Vérifie si l'étudiant a terminé le cours associé à ce module d'exercices
+            # Vérifie si l'étudiant a terminé ce cours (obj est directement le Course ici)
             return CourseProgress.objects.filter(
                 user=user,              
-                course=obj.course, 
+                course=obj, 
                 is_completed=True       
             ).exists()
         return False
+
     
 class ExerciseSubmissionSerializer(serializers.ModelSerializer):
     student_id = serializers.IntegerField(source='student.id', read_only=True)
